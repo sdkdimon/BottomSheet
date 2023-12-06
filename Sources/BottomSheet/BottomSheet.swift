@@ -9,6 +9,7 @@ import SwiftUI
 
 struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewModifier, KeyboardReader {
     @Binding private var isPresented: Bool
+    @State private var shuldBeDismissed: Bool = false
     
     @State private var translation: CGFloat = 0
     @State private var sheetConfig: SheetPlusConfig?
@@ -20,6 +21,7 @@ struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewModifier
     
     @State private var detents: Set<PresentationDetent> = []
     @State private var limits: (min: CGFloat, max: CGFloat) = (min: 0, max: 0)
+    @State private var translationBeforeKeyboard: CGFloat = 0
     
     let mainContent: MContent
     let headerContent: HContent
@@ -52,8 +54,7 @@ struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewModifier
         ZStack() {
             content
                 .allowsHitTesting(allowBackgroundInteraction == .disabled ? false : true)
-                
-            if isPresented {
+            if isPresented || self.shuldBeDismissed {
                 GeometryReader { geometry in
                     VStack(spacing: 0) {
                         // If / else statement here breaks the animation from the bottom level
@@ -81,12 +82,25 @@ struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewModifier
                                         // Reset the distance on release so we start with a
                                         // clean translation next time
                                         newValue = 0
+                                        if translation <= limits.min * 0.65 {
+                                            self.isPresented = false
+                                            return
+                                        }
+                                        
+                                        
                                         
                                         // Calculate velocity based on pt/s so it matches the UIPanGesture
                                         let distance: CGFloat = value.translation.height
+                                        //May be crash here
                                         let time: CGFloat = value.time.timeIntervalSince(startTime!.time)
                                         
                                         let yVelocity: CGFloat = -1 * ((distance / time) / 1000)
+                                        if yVelocity < 0 && yVelocity < -2.5 {
+                                            self.isPresented = false
+                                            return
+                                        }
+                                        print("yVelocity \(yVelocity)")
+                                        print("yVelocity new \(value.velocity.height / 1000)")
                                         startTime = nil
                                         
                                         if let result = snapBottomSheet(translation, detents, yVelocity) {
@@ -96,30 +110,36 @@ struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewModifier
                                     }
                             )
                         
-                        UIScrollViewWrapper(
-                            translation: $translation,
-                            preferenceKey: $sheetConfig,
-                            limits: limits,
-                            detents: detents
-                        ) {
+//                        UIScrollViewWrapper(
+//                            translation: $translation,
+//                            preferenceKey: $sheetConfig,
+//                            limits: limits,
+//                            detents: detents
+//                        ) {
                             mainContent
                                 .frame(width: geometry.size.width)
-                        }
+//                        }
                     }
                     .background(background)
                     .frame(height:
-                            (limits.max - geometry.safeAreaInsets.top) > 0
-                                ? limits.max - geometry.safeAreaInsets.top
-                                : limits.max
-                    )
+                            self.translation)
+//                    .frame(height:
+//                            (limits.max - geometry.safeAreaInsets.top) > 0
+//                                ? limits.max - geometry.safeAreaInsets.top
+//                                : limits.max
+//                    )
                     .onChange(of: translation) { newValue in
                         // Small little hack to make the iOS scroll behaviour work smoothly
                         if limits.max == 0 { return }
-                        translation = min(limits.max, max(newValue, limits.min))
+                        translation = min(limits.max, newValue)
 
                         currentGlobalTranslation = translation
                     }
                     .onAnimationChange(of: translation) { value in
+//                        print("onAnimationChange \(value)")
+                        if self.shuldBeDismissed && value <= 0 {
+                            self.shuldBeDismissed = false
+                        }
                         onDrag(value)
                     }
                     .offset(y: UIScreen.main.bounds.height - translation)
@@ -128,19 +148,22 @@ struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewModifier
                         detents = []
                         
                         onDismiss()
+                        print("onDisappear")
                     }
                     .animation(
                         .interpolatingSpring(
                             mass: animationCurve.mass,
                             stiffness: animationCurve.stiffness,
                             damping: animationCurve.damping
-                        )
+                        ),
+                        value: self.translation
                     )
+                    
                 }
                 .edgesIgnoringSafeArea([.bottom])
-                .transition(.move(edge: .bottom))
             }
         }
+        .zIndex(0)
         .onPreferenceChange(SheetPlusKey.self) { value in
             /// Quick hack to prevent the scrollview from resetting the height when keyboard shows up.
             /// Replace if the root cause has been located.
@@ -157,6 +180,15 @@ struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewModifier
         }
         .onPreferenceChange(SheetPlusBackgroundInteractionKey.self) { value in
             allowBackgroundInteraction = value
+        }
+        .onChange(of: self.isPresented) { [oldValue = self.isPresented] newValue in
+            if oldValue && !newValue {
+                self.translation = 0
+                self.shuldBeDismissed = true
+            }
+        }
+        .onReceive(self.keyboardPublisher) { willShow in
+            self.translation = willShow ? self.limits.max : self.limits.min
         }
     }
 }

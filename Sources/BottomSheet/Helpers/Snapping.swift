@@ -22,10 +22,11 @@ internal func snapBottomSheet(_ translation: CGFloat, _ detents: Set<Presentatio
                 lower: detents[idx],
                 middle: detents[idx].size + ((detents[idx + 1].size - detents[idx].size) / 2),
                 upper: detents[idx + 1]
-            )            
+            )
             
-            if detentBracket.lower.size...detentBracket.upper.size ~= translation {
-                if abs(yVelocity) > 1.8 {
+            if 0...detentBracket.upper.size ~= translation {
+                //Swipe detection here
+                if abs(yVelocity) > 1.5 {
                     return yVelocity > 0 ? detentBracket.upper : detentBracket.lower
                 } else {
                     return translation > detentBracket.middle
