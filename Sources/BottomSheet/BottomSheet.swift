@@ -9,8 +9,6 @@ import SwiftUI
 
 struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewModifier, KeyboardReader {
     @Binding private var isPresented: Bool
-    @State private var shuldBeDismissed: Bool = false
-    
     @State private var translation: CGFloat = 0
     @State private var sheetConfig: SheetPlusConfig?
     @State private var showDragIndicator: VisibilityPlus?
@@ -50,120 +48,122 @@ struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewModifier
         self.mainContent = mcontent()
     }
     
+    var animation: Animation {
+        get {
+            .interpolatingSpring(
+                mass: animationCurve.mass,
+                stiffness: animationCurve.stiffness,
+                damping: animationCurve.damping
+            )
+        }
+    }
+    
+    var drag: some Gesture {
+        DragGesture(coordinateSpace: .global)
+            .onChanged { value in
+                withAnimation(self.animation) {
+                    translation -= value.location.y - value.startLocation.y - newValue
+                    newValue = value.location.y - value.startLocation.y
+                    
+                    if startTime == nil {
+                        startTime = value
+                    }
+                }
+            }
+            .onEnded { value in
+                // Reset the distance on release so we start with a
+                // clean translation next time
+                newValue = 0
+                if translation <= limits.min * 0.65 {
+                    self.isPresented = false
+                    return
+                }
+                
+                
+                
+                // Calculate velocity based on pt/s so it matches the UIPanGesture
+                let distance: CGFloat = value.translation.height
+                //May be crash here
+                let time: CGFloat = value.time.timeIntervalSince(startTime!.time)
+                
+                let yVelocity: CGFloat = -1 * ((distance / time) / 1000)
+                if yVelocity < 0 && yVelocity < -2.5 {
+                    self.isPresented = false
+                    return
+                }
+                print("yVelocity \(yVelocity)")
+                print("yVelocity new \(value.velocity.height / 1000)")
+                startTime = nil
+                
+                if let result = snapBottomSheet(translation, detents, yVelocity) {
+                    withAnimation(self.animation) {
+                        translation = result.size
+                        sheetConfig?.selectedDetent = result
+                    }
+                }
+            }
+    }
+    
+    var dragIndicator: some View {
+        DragIndicator(
+            translation: $translation,
+            detents: detents
+        )
+        .frame(height: showDragIndicator == .visible ? 22 : 0)
+        .opacity(showDragIndicator == .visible ? 1 : 0)
+    }
+    
     func body(content: Content) -> some View {
         ZStack() {
             content
                 .allowsHitTesting(allowBackgroundInteraction == .disabled ? false : true)
-            if isPresented || self.shuldBeDismissed {
+            if isPresented {
                 GeometryReader { geometry in
                     VStack(spacing: 0) {
-                        // If / else statement here breaks the animation from the bottom level
-                        // Might want to see if we can refactor the top level animation a bit
-                        DragIndicator(
-                            translation: $translation,
-                            detents: detents
-                        )
-                            .frame(height: showDragIndicator == .visible ? 22 : 0)
-                            .opacity(showDragIndicator == .visible ? 1 : 0)
-
-                        headerContent
+                        self.dragIndicator
+                        self.headerContent
                             .contentShape(Rectangle())
-                            .gesture(
-                                DragGesture(coordinateSpace: .global)
-                                    .onChanged { value in
-                                        translation -= value.location.y - value.startLocation.y - newValue
-                                        newValue = value.location.y - value.startLocation.y
-                                        
-                                        if startTime == nil {
-                                            startTime = value
-                                        }
-                                    }
-                                    .onEnded { value in
-                                        // Reset the distance on release so we start with a
-                                        // clean translation next time
-                                        newValue = 0
-                                        if translation <= limits.min * 0.65 {
-                                            self.isPresented = false
-                                            return
-                                        }
-                                        
-                                        
-                                        
-                                        // Calculate velocity based on pt/s so it matches the UIPanGesture
-                                        let distance: CGFloat = value.translation.height
-                                        //May be crash here
-                                        let time: CGFloat = value.time.timeIntervalSince(startTime!.time)
-                                        
-                                        let yVelocity: CGFloat = -1 * ((distance / time) / 1000)
-                                        if yVelocity < 0 && yVelocity < -2.5 {
-                                            self.isPresented = false
-                                            return
-                                        }
-                                        print("yVelocity \(yVelocity)")
-                                        print("yVelocity new \(value.velocity.height / 1000)")
-                                        startTime = nil
-                                        
-                                        if let result = snapBottomSheet(translation, detents, yVelocity) {
-                                            translation = result.size
-                                            sheetConfig?.selectedDetent = result
-                                        }
-                                    }
-                            )
-                        
-//                        UIScrollViewWrapper(
-//                            translation: $translation,
-//                            preferenceKey: $sheetConfig,
-//                            limits: limits,
-//                            detents: detents
-//                        ) {
-                            mainContent
-                                .frame(width: geometry.size.width)
-//                        }
+                            .gesture(self.drag)
+                        self.mainContent
+                            .frame(width: geometry.size.width)
                     }
-                    .background(background)
-                    .frame(height:
-                            self.translation)
-//                    .frame(height:
-//                            (limits.max - geometry.safeAreaInsets.top) > 0
-//                                ? limits.max - geometry.safeAreaInsets.top
-//                                : limits.max
-//                    )
+                    .background(self.background)
+                    .frame(height: self.translation)
                     .onChange(of: translation) { newValue in
                         // Small little hack to make the iOS scroll behaviour work smoothly
                         if limits.max == 0 { return }
                         translation = min(limits.max, newValue)
 
                         currentGlobalTranslation = translation
+                        print("onChange(of: translation) \(newValue)")
                     }
                     .onAnimationChange(of: translation) { value in
-//                        print("onAnimationChange \(value)")
-                        if self.shuldBeDismissed && value <= 0 {
-                            self.shuldBeDismissed = false
-                        }
+                        print("onAnimationChange \(value)")
                         onDrag(value)
                     }
-                    .offset(y: UIScreen.main.bounds.height - translation)
+                    .offset(y: geometry.size.height - translation)
                     .onDisappear {
                         translation = 0
                         detents = []
                         
                         onDismiss()
                         print("onDisappear")
-                    }
-                    .animation(
-                        .interpolatingSpring(
-                            mass: animationCurve.mass,
-                            stiffness: animationCurve.stiffness,
-                            damping: animationCurve.damping
-                        ),
-                        value: self.translation
-                    )
-                    
+                    }                    
                 }
+                .transition(.asymmetric(insertion: .move(edge: .bottom), removal: .move(edge: .bottom)))
                 .edgesIgnoringSafeArea([.bottom])
             }
         }
         .zIndex(0)
+        .animation(
+            .interpolatingSpring(
+                mass: animationCurve.mass,
+                stiffness: animationCurve.stiffness,
+                damping: animationCurve.damping
+            ),
+            value: self.isPresented
+        )
+        
         .onPreferenceChange(SheetPlusKey.self) { value in
             /// Quick hack to prevent the scrollview from resetting the height when keyboard shows up.
             /// Replace if the root cause has been located.
@@ -183,8 +183,7 @@ struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewModifier
         }
         .onChange(of: self.isPresented) { [oldValue = self.isPresented] newValue in
             if oldValue && !newValue {
-                self.translation = 0
-                self.shuldBeDismissed = true
+//                self.translation = 0
             }
         }
         .onReceive(self.keyboardPublisher) { willShow in
