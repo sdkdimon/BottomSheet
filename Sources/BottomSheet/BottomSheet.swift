@@ -117,41 +117,43 @@ struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewModifier
         ZStack() {
             content
                 .allowsHitTesting(allowBackgroundInteraction == .disabled ? false : true)
-            if isPresented {
-                GeometryReader { geometry in
-                    VStack(spacing: 0) {
-                        self.dragIndicator
-                        self.headerContent
-                            .contentShape(Rectangle())
-                            .gesture(self.drag)
-                        self.mainContent
-                            .frame(width: geometry.size.width)
+            ZStack {
+                if isPresented {
+                    GeometryReader { geometry in
+                        VStack(spacing: 0) {
+                            self.dragIndicator
+                            self.headerContent
+                                .contentShape(Rectangle())
+                                .gesture(self.drag)
+                            self.mainContent
+                                .frame(width: geometry.size.width)
+                        }
+                        .background(self.background)
+                        .frame(height: self.translation)
+                        .onChange(of: translation) { newValue in
+                            // Small little hack to make the iOS scroll behaviour work smoothly
+                            if limits.max == 0 { return }
+                            translation = min(limits.max, newValue)
+                            
+                            currentGlobalTranslation = translation
+                            print("onChange(of: translation) \(newValue)")
+                        }
+                        .onAnimationChange(of: translation) { value in
+                            print("onAnimationChange \(value)")
+                            onDrag(value)
+                        }
+                        .offset(y: geometry.size.height - translation)
+                        .onDisappear {
+                            translation = 0
+                            detents = []
+                            
+                            onDismiss()
+                            print("onDisappear")
+                        }                    
                     }
-                    .background(self.background)
-                    .frame(height: self.translation)
-                    .onChange(of: translation) { newValue in
-                        // Small little hack to make the iOS scroll behaviour work smoothly
-                        if limits.max == 0 { return }
-                        translation = min(limits.max, newValue)
-
-                        currentGlobalTranslation = translation
-                        print("onChange(of: translation) \(newValue)")
-                    }
-                    .onAnimationChange(of: translation) { value in
-                        print("onAnimationChange \(value)")
-                        onDrag(value)
-                    }
-                    .offset(y: geometry.size.height - translation)
-                    .onDisappear {
-                        translation = 0
-                        detents = []
-                        
-                        onDismiss()
-                        print("onDisappear")
-                    }                    
+                    .transition(.asymmetric(insertion: .move(edge: .bottom), removal: .move(edge: .bottom)))
+                    .edgesIgnoringSafeArea([.bottom])
                 }
-                .transition(.asymmetric(insertion: .move(edge: .bottom), removal: .move(edge: .bottom)))
-                .edgesIgnoringSafeArea([.bottom])
             }
         }
         .zIndex(0)
