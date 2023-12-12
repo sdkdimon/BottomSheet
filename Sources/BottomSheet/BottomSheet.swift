@@ -61,9 +61,8 @@ struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewModifier
         DragGesture(coordinateSpace: .global)
             .onChanged { value in
                 withAnimation(self.animation) {
-                    translation -= value.location.y - value.startLocation.y - newValue
-                    newValue = value.location.y - value.startLocation.y
-                    
+                    translation -= value.translation.height - newValue
+                    newValue = value.translation.height
                 }
             }
             .onEnded { value in
@@ -80,16 +79,10 @@ struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewModifier
                     self.isPresented = false
                     return
                 }
-                print("yVelocity \(yVelocity)")
-                print("yVelocity new \(value.velocity.height / 1000)")
-                
-                print("translation \(translation)")
                 
                 if let result = snapBottomSheet(translation, detents, yVelocity) {
                     withAnimation(self.animation) {
                         translation = result.size
-                        print("snapped translation \(translation)")
-                        print("PresentationDetent.large.size \(PresentationDetent.large.size)")
                         sheetConfig?.selectedDetent = result
                     }
                 }
@@ -131,7 +124,6 @@ struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewModifier
                             detents = []
                             
                             onDismiss()
-                            print("onDisappear")
                         }
                     }
                     .transition(.asymmetric(insertion: .move(edge: .bottom), removal: .move(edge: .bottom)))

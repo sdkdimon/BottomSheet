@@ -8,7 +8,7 @@
 import Foundation
 
 public struct SheetAnimationDefaults {
-    public static let mass: Double =  1.2
-    public static let stiffness: Double = 200
-    public static let damping: Double = 25
+    public static let mass: Double =  0.4
+    public static let stiffness: Double = 150
+    public static let damping: Double = 30
 }
