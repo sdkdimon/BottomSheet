@@ -91,6 +91,7 @@ public struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewM
     
     var dragIndicator: some View {
         DragIndicator(
+            animation: self.animation,
             translation: $translation,
             detents: detents
         )

@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct DragIndicator: View {
+    var animation: Animation?
     @Binding var translation: CGFloat
     var detents: Set<PresentationDetent>
 
@@ -18,13 +19,15 @@ struct DragIndicator: View {
             .foregroundColor(Color(UIColor.systemGray3))
             .padding(.vertical, 8)
             .onTapGesture {
-                let sortedDetents = detents.sorted { $0.size < $1.size }
-                let nextDetent = sortedDetents.first(where: { $0.size > translation })
+                withAnimation(self.animation) {
+                    let sortedDetents = detents.sorted { $0.size < $1.size }
+                    let nextDetent = sortedDetents.first(where: { $0.size > translation })
 
-                if let nextDetent = nextDetent {
-                    translation = nextDetent.size
-                } else {
-                    translation = sortedDetents.first!.size
+                    if let nextDetent = nextDetent {
+                        translation = nextDetent.size
+                    } else {
+                        translation = sortedDetents.first!.size
+                    }
                 }
             }
     }
