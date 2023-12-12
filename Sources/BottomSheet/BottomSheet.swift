@@ -15,7 +15,6 @@ struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewModifier
     @State private var allowBackgroundInteraction: PresentationBackgroundInteractionPlus?
     
     @State private var newValue = 0.0
-    @State private var startTime: DragGesture.Value?
     
     @State private var detents: Set<PresentationDetent> = []
     @State private var limits: (min: CGFloat, max: CGFloat) = (min: 0, max: 0)
@@ -65,9 +64,6 @@ struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewModifier
                     translation -= value.location.y - value.startLocation.y - newValue
                     newValue = value.location.y - value.startLocation.y
                     
-                    if startTime == nil {
-                        startTime = value
-                    }
                 }
             }
             .onEnded { value in
@@ -79,25 +75,21 @@ struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewModifier
                     return
                 }
                 
-                
-                
-                // Calculate velocity based on pt/s so it matches the UIPanGesture
-                let distance: CGFloat = value.translation.height
-                //May be crash here
-                let time: CGFloat = value.time.timeIntervalSince(startTime!.time)
-                
-                let yVelocity: CGFloat = -1 * ((distance / time) / 1000)
-                if yVelocity < 0 && yVelocity < -2.5 {
+                let yVelocity: CGFloat = -1 * value.velocity.height / 1000
+                if yVelocity < 0 && yVelocity < -2.3 {
                     self.isPresented = false
                     return
                 }
                 print("yVelocity \(yVelocity)")
                 print("yVelocity new \(value.velocity.height / 1000)")
-                startTime = nil
+                
+                print("translation \(translation)")
                 
                 if let result = snapBottomSheet(translation, detents, yVelocity) {
                     withAnimation(self.animation) {
                         translation = result.size
+                        print("snapped translation \(translation)")
+                        print("PresentationDetent.large.size \(PresentationDetent.large.size)")
                         sheetConfig?.selectedDetent = result
                     }
                 }
@@ -114,7 +106,7 @@ struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewModifier
     }
     
     func body(content: Content) -> some View {
-        ZStack() {
+        ZStack {
             content
                 .allowsHitTesting(allowBackgroundInteraction == .disabled ? false : true)
             ZStack {
@@ -130,16 +122,7 @@ struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewModifier
                         }
                         .background(self.background)
                         .frame(height: self.translation)
-                        .onChange(of: translation) { newValue in
-                            // Small little hack to make the iOS scroll behaviour work smoothly
-                            if limits.max == 0 { return }
-                            translation = min(limits.max, newValue)
-                            
-                            currentGlobalTranslation = translation
-                            print("onChange(of: translation) \(newValue)")
-                        }
                         .onAnimationChange(of: translation) { value in
-                            print("onAnimationChange \(value)")
                             onDrag(value)
                         }
                         .offset(y: geometry.size.height - translation)
@@ -149,7 +132,7 @@ struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewModifier
                             
                             onDismiss()
                             print("onDisappear")
-                        }                    
+                        }
                     }
                     .transition(.asymmetric(insertion: .move(edge: .bottom), removal: .move(edge: .bottom)))
                     .edgesIgnoringSafeArea([.bottom])
@@ -158,11 +141,7 @@ struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewModifier
         }
         .zIndex(0)
         .animation(
-            .interpolatingSpring(
-                mass: animationCurve.mass,
-                stiffness: animationCurve.stiffness,
-                damping: animationCurve.damping
-            ),
+            self.animation,
             value: self.isPresented
         )
         
@@ -183,13 +162,10 @@ struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewModifier
         .onPreferenceChange(SheetPlusBackgroundInteractionKey.self) { value in
             allowBackgroundInteraction = value
         }
-        .onChange(of: self.isPresented) { [oldValue = self.isPresented] newValue in
-            if oldValue && !newValue {
-//                self.translation = 0
-            }
-        }
         .onReceive(self.keyboardPublisher) { willShow in
-            self.translation = willShow ? self.limits.max : self.limits.min
+            withAnimation(self.animation) {
+                self.translation = willShow ? self.limits.max : self.limits.min
+            }
         }
     }
 }

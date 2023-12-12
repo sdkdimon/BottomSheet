@@ -16,6 +16,14 @@ import Foundation
 internal func snapBottomSheet(_ translation: CGFloat, _ detents: Set<PresentationDetent>, _ yVelocity: CGFloat) -> PresentationDetent? {
     let detents = detents.sorted(by: { $0.size < $1.size })
     
+    //Overdrag handle
+    if let minDetent: PresentationDetent = detents.first, translation < minDetent.size {
+        return minDetent
+    }
+    if let maxDetent: PresentationDetent = detents.last, translation > maxDetent.size {
+        return maxDetent
+    }
+    //Snapping between detents
     let position: [PresentationDetent] = detents.enumerated().compactMap { idx, detent in
         if idx < detents.index(before: detents.count) {
             let detentBracket = (
@@ -24,9 +32,9 @@ internal func snapBottomSheet(_ translation: CGFloat, _ detents: Set<Presentatio
                 upper: detents[idx + 1]
             )
             
-            if 0...detentBracket.upper.size ~= translation {
+            if detentBracket.lower.size...detentBracket.upper.size ~= translation {
                 //Swipe detection here
-                if abs(yVelocity) > 1.5 {
+                if abs(yVelocity) > 0.6 {
                     return yVelocity > 0 ? detentBracket.upper : detentBracket.lower
                 } else {
                     return translation > detentBracket.middle
