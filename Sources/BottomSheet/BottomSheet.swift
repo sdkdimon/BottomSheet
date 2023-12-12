@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewModifier, KeyboardReader {
+public struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewModifier, KeyboardReader {
     @Binding private var isPresented: Bool
     @State private var translation: CGFloat = 0
     @State private var sheetConfig: SheetPlusConfig?
@@ -98,7 +98,7 @@ struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewModifier
         .opacity(showDragIndicator == .visible ? 1 : 0)
     }
     
-    func body(content: Content) -> some View {
+    public func body(content: Content) -> some View {
         ZStack {
             content
                 .allowsHitTesting(allowBackgroundInteraction == .disabled ? false : true)
