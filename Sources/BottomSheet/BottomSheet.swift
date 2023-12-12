@@ -27,7 +27,7 @@ public struct SheetPlus<HContent: View, MContent: View, Background: View>: ViewM
     let onDrag: (CGFloat) -> Void
     let background: Background
     
-    init(
+    public init(
         isPresented: Binding<Bool>,
         animationCurve: SheetAnimation,
         background: Background,
